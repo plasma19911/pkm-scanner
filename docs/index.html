@@ -303,8 +303,11 @@ nav .count{
 "use strict";
 
 /* Beim Öffnen per Doppelklick (file://) läuft die App gegen den lokalen
-   Server; über WLAN/Tunnel geliefert bleibt alles relativ. */
+   Server. Sonst bleibt alles relativ - wichtig, weil die App bei GitHub
+   Pages in einem Unterordner liegt (/pkm-scanner/) und ein absoluter Pfad
+   dort auf der falschen Ebene landen würde. */
 var BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+var DATA_URL = BASE ? BASE + '/data.json' : './data.json';
 
 var DATA = null;
 var LIVE = false;          /* laeuft ein Scanner-Server (--serve)? */
@@ -362,7 +365,7 @@ function history(key){
 
 /* ---------------- Daten laden ---------------- */
 function load(silent){
-  return fetch(BASE + '/data.json?t=' + Date.now(), { cache:'no-store' })
+  return fetch(DATA_URL + '?t=' + Date.now(), { cache:'no-store' })
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(d){ DATA = d; paintHeader(); render(); return true; })
     .catch(function(){
