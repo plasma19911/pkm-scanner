@@ -1,0 +1,50 @@
+name: Täglicher Pokémon-Scan
+
+on:
+  schedule:
+    # 05:30 UTC = 07:30 deutscher Sommerzeit, 06:30 im Winter.
+    # GitHub startet geplante Läufe je nach Auslastung ein paar Minuten später.
+    - cron: "30 5 * * *"
+  # Zusätzlich jederzeit von Hand startbar: Reiter "Actions" -> diesen
+  # Workflow wählen -> "Run workflow".
+  workflow_dispatch:
+
+# Der Workflow schreibt die neuen Daten zurück ins Repository.
+permissions:
+  contents: write
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Repository holen
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pillow installieren (für die App-Icons)
+        run: pip install --quiet pillow
+
+      - name: Shops scannen und App veröffentlichen
+        run: python scan.py --publish-dir docs
+
+      - name: Ergebnis zurück ins Repository schreiben
+        run: |
+          git config user.name "pkm-scanner-bot"
+          git config user.email "actions@github.com"
+          git add -A docs price_history.json offers_history.json http_cache.json alerts.json corrections.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "Keine Änderungen - nichts zu committen."
+          else
+            git commit -m "Scan vom $(date -u '+%d.%m.%Y %H:%M') UTC"
+            git push
+          fi
