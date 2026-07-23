@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0d0e1c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PKM Scanner">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>PKM Scanner</title>
+<style>
+:root{
+  --ink:#0d0e1c;
+  --surface:#171932;
+  --surface-hi:#1f2242;
+  --line:rgba(255,255,255,.09);
+  --text:#f0f1ff;
+  --muted:#8b91bd;
+  --accent:#ffcb05;
+  --hot:#ff4d63;
+  --mint:#3ddba4;
+  --pad:14px;
+  --nav-h:60px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ink);color:var(--text);font-family:var(--sans);
+  font-size:15px;line-height:1.4;
+  padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));
+  overscroll-behavior-y:contain;
+}
+button,input{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+
+/* ---------- Kopfbereich ---------- */
+header{
+  position:sticky;top:0;z-index:30;
+  background:rgba(13,14,28,.92);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top) + 10px) var(--pad) 0;
+}
+.brand{display:flex;align-items:center;gap:9px}
+.mark{width:22px;height:22px;flex:0 0 auto}
+.wordmark{
+  font-size:13px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+}
+.wordmark span{color:var(--accent)}
+.stand{
+  margin-left:auto;display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--muted);letter-spacing:.02em;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.dot.live{background:var(--mint);box-shadow:0 0 0 3px rgba(61,219,164,.15)}
+.dot.stale{background:var(--hot)}
+
+.searchrow{display:flex;gap:8px;margin-top:11px}
+.search{
+  flex:1;display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--line);border-radius:11px;
+  padding:0 11px;height:40px;
+}
+.search svg{flex:0 0 auto;opacity:.5}
+.search input{flex:1;background:none;border:0;outline:none;min-width:0}
+.search input::placeholder{color:var(--muted)}
+.iconbtn{
+  width:40px;height:40px;flex:0 0 auto;display:grid;place-items:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:11px;
+}
+.iconbtn:active{background:var(--surface-hi)}
+.iconbtn.busy svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.chips{
+  display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;
+  margin:10px calc(var(--pad)*-1) 0;padding:0 var(--pad) 11px;
+}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;background:var(--surface);border:1px solid var(--line);
+  border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--muted);
+  white-space:nowrap;display:flex;align-items:center;gap:5px;
+}
+.chip b{color:var(--text);font-weight:600}
+.chip.on{border-color:var(--accent);color:var(--ink);background:var(--accent)}
+.chip.on b{color:var(--ink)}
+.chip .caret{opacity:.55;font-size:9px}
+
+/* ---------- Liste ---------- */
+main{padding:var(--pad) var(--pad) 24px;display:flex;flex-direction:column;gap:9px}
+.sectionlabel{
+  font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:14px 0 2px;display:flex;align-items:center;gap:9px;
+}
+.sectionlabel::after{content:"";flex:1;height:1px;background:var(--line)}
+.sectionlabel:first-child{margin-top:0}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:15px;
+  overflow:hidden;
+}
+.card.open{border-color:rgba(255,203,5,.4)}
+.cardtop{display:flex;gap:12px;padding:11px;align-items:center;width:100%;background:none;border:0;text-align:left}
+.thumb{
+  width:62px;height:62px;flex:0 0 auto;border-radius:10px;overflow:hidden;
+  background:var(--surface-hi);display:grid;place-items:center;position:relative;
+}
+.thumb img{width:100%;height:100%;object-fit:contain}
+.thumb .ph{font-size:20px;opacity:.35}
+.cardmain{flex:1;min-width:0}
+.ttl{
+  font-size:13.5px;font-weight:600;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.sub{margin-top:4px;font-size:11px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag{border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:10px}
+.pricecol{flex:0 0 auto;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.ab{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.price{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.badge{
+  background:var(--hot);color:#fff;font-size:10.5px;font-weight:700;
+  border-radius:999px;padding:2px 7px;font-variant-numeric:tabular-nums;
+}
+.badge.pre{background:var(--mint);color:#052b1f}
+
+/* ---------- Preisleiter (Signature) ---------- */
+.ladder{display:none;padding:2px 11px 12px;border-top:1px solid var(--line)}
+.card.open .ladder{display:block}
+.ladderhead{
+  display:flex;justify-content:space-between;align-items:baseline;
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  padding:11px 0 9px;
+}
+.rung{display:block;padding:7px 0;border-bottom:1px dashed rgba(255,255,255,.06)}
+.rung:last-child{border-bottom:0}
+.rungtop{display:flex;align-items:baseline;gap:8px;font-size:12.5px}
+.rungshop{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.runglang{font-size:10px;color:var(--muted);flex:0 0 auto}
+.rungprice{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;flex:0 0 auto}
+.rungold{font-size:10.5px;color:var(--muted);text-decoration:line-through;flex:0 0 auto}
+.bar{height:4px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:#4a4f80}
+.rung.best .bar i{background:var(--accent)}
+.rung.best .rungprice{color:var(--accent)}
+.best-tag{
+  font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink);background:var(--accent);border-radius:4px;padding:1px 5px;flex:0 0 auto;
+}
+.spark{margin:2px 0 4px}
+.sparkhead{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);padding:11px 0 6px}
+.sparkhead span{letter-spacing:0;font-variant-numeric:tabular-nums;color:var(--text)}
+.spark svg{width:100%;height:52px;display:block}
+.sparknote{font-size:10.5px;color:var(--muted);margin:0 0 8px}
+
+/* ---------- Flache Zeilen (Tab "Neu") ---------- */
+.row{display:flex;gap:11px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px}
+.row .thumb{width:46px;height:46px}
+.rowmain{flex:1;min-width:0}
+.rowprice{font-variant-numeric:tabular-nums;font-weight:700;flex:0 0 auto;text-align:right}
+.rowprice small{display:block;font-weight:400;font-size:10.5px;color:var(--muted);text-decoration:line-through}
+
+/* ---------- Zustände ---------- */
+.empty{padding:52px 20px;text-align:center;color:var(--muted)}
+.empty h2{color:var(--text);font-size:16px;margin:0 0 7px}
+.empty p{margin:0 auto;max-width:30ch;font-size:13px}
+.empty code{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px;color:var(--text)}
+.more{
+  margin:6px auto 0;background:var(--surface);border:1px solid var(--line);
+  border-radius:11px;padding:11px 22px;color:var(--muted);font-size:13px;
+}
+.skeleton{height:86px;border-radius:15px;background:var(--surface);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:.85}}
+
+/* ---------- Ziehen zum Aktualisieren ---------- */
+#pull{
+  position:fixed;top:0;left:0;right:0;height:0;z-index:20;
+  display:flex;align-items:flex-end;justify-content:center;
+  color:var(--muted);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+  overflow:hidden;pointer-events:none;
+}
+#pull span{padding-bottom:7px}
+
+/* ---------- Tab-Leiste ---------- */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  display:grid;grid-template-columns:repeat(4,1fr);
+  background:rgba(13,14,28,.94);backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+nav button{
+  background:none;border:0;height:var(--nav-h);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--muted);font-size:10px;letter-spacing:.04em;position:relative;
+}
+nav button svg{width:21px;height:21px}
+nav button.on{color:var(--accent)}
+nav button.on::before{
+  content:"";position:absolute;top:0;width:26px;height:2px;border-radius:0 0 2px 2px;background:var(--accent);
+}
+nav .count{
+  position:absolute;top:8px;left:calc(50% + 8px);
+  background:var(--surface-hi);border-radius:999px;font-size:9px;padding:0 4px;color:var(--text);
+}
+
+/* ---------- Bottom Sheet ---------- */
+#sheetwrap{position:fixed;inset:0;z-index:50;display:none}
+#sheetwrap.open{display:block}
+#sheetwrap .scrim{position:absolute;inset:0;background:rgba(5,5,14,.6)}
+#sheet{
+  position:absolute;left:0;right:0;bottom:0;
+  background:var(--surface);border-radius:19px 19px 0 0;border-top:1px solid var(--line);
+  padding:8px var(--pad) calc(20px + env(safe-area-inset-bottom));
+  max-height:72vh;overflow-y:auto;
+}
+#sheet .grip{width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 14px}
+#sheet h3{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.sheetopts{display:flex;flex-wrap:wrap;gap:7px}
+
+#toast{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(20px);
+  bottom:calc(var(--nav-h) + 18px + env(safe-area-inset-bottom));z-index:60;
+  background:var(--surface-hi);border:1px solid var(--line);border-radius:11px;
+  padding:10px 15px;font-size:12.5px;max-width:86vw;text-align:center;
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div id="pull"><span id="pulltext">Ziehen zum Aktualisieren</span></div>
+
+<header>
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18" fill="#ffcb05"/>
+      <path d="M2 20a18 18 0 0 0 36 0z" fill="#171932"/>
+      <rect x="2" y="17.5" width="36" height="5" fill="#0d0e1c"/>
+      <circle cx="20" cy="20" r="6.5" fill="#0d0e1c"/>
+      <circle cx="20" cy="20" r="3.6" fill="#f0f1ff"/>
+    </svg>
+    <div class="wordmark">PKM <span>Scanner</span></div>
+    <div class="stand"><i class="dot" id="statusDot"></i><span id="standText">lädt …</span></div>
+  </div>
+
+  <div class="searchrow">
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Produkt oder Shop suchen" autocomplete="off" enterkeyhint="search">
+    </label>
+    <button class="iconbtn" id="refresh" aria-label="Neu suchen">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+    </button>
+  </div>
+
+  <div class="chips" id="chips">
+    <button class="chip" data-cycle="sort">Sortierung <b id="c-sort">Rabatt</b><span class="caret">▼</span></button>
+    <button class="chip" data-cycle="lang">Sprache <b id="c-lang">Alle</b><span class="caret">▼</span></button>
+    <button class="chip" data-cycle="disc">Rabatt <b id="c-disc">egal</b><span class="caret">▼</span></button>
+    <button class="chip" id="c-type-chip">Kategorie <b id="c-type">Alle</b><span class="caret">▼</span></button>
+  </div>
+</header>
+
+<main id="list"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></main>
+
+<nav id="tabs">
+  <button data-tab="offers" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12.4 21.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h9a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.4"/></svg>
+    Angebote<i class="count" id="n-offers"></i>
+  </button>
+  <button data-tab="preorders">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    Vorbestellung<i class="count" id="n-preorders"></i>
+  </button>
+  <button data-tab="alerts">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6Z"/><path d="M10.5 20a2 2 0 0 0 3 0"/></svg>
+    Alarme<i class="count" id="n-alerts"></i>
+  </button>
+  <button data-tab="changes">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+    Neu<i class="count" id="n-changes"></i>
+  </button>
+</nav>
+
+<div id="sheetwrap"><div class="scrim"></div><div id="sheet">
+  <div class="grip"></div>
+  <h3>Kategorie</h3>
+  <div class="sheetopts" id="typeopts"></div>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* Beim Öffnen per Doppelklick (file://) läuft die App gegen den lokalen
+   Server; über WLAN/Tunnel geliefert bleibt alles relativ. */
+var BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
+
+var DATA = null;
+var LIVE = false;          /* laeuft ein Scanner-Server (--serve)? */
+var HIST = null;           /* Preisverlauf aus history.json (Cloud-Betrieb) */
+var HIST_PENDING = null;
+var S = { tab:'offers', q:'', sort:0, lang:0, disc:0, type:'Alle', shown:0 };
+var SORTS = [
+  ['Rabatt',        function(a,b){ return b.best_discount - a.best_discount || a.min_price - b.min_price; }],
+  ['Preis aufw.',   function(a,b){ return a.min_price - b.min_price; }],
+  ['Preis abw.',    function(a,b){ return b.min_price - a.min_price; }],
+  ['Shops',         function(a,b){ return b.shop_count - a.shop_count; }],
+  ['A–Z',           function(a,b){ return a.title.localeCompare(b.title,'de'); }]
+];
+var LANGS = ['Alle','Deutsch','Englisch','Japanisch','Chinesisch'];
+var DISCS = [['egal',0],['ab 10%',10],['ab 20%',20],['ab 30%',30],['ab 50%',50]];
+var PAGE = 24;
+
+var $ = function(id){ return document.getElementById(id); };
+var list = $('list');
+
+function euro(n){ return n.toFixed(2).replace('.',',') + ' €'; }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+var toastTimer;
+function toast(msg){
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
+/* Läuft die App gegen einen laufenden Scanner (dann sind Neu-Suchen und
+   Live-Verlauf möglich) oder gegen einen statischen Ordner wie GitHub
+   Pages (dann kommt alles aus data.json und history.json)? */
+function detectMode(){
+  return fetch(BASE + '/progress', { cache:'no-store' })
+    .then(function(r){ return r.ok; })
+    .catch(function(){ return false; })
+    .then(function(live){
+      LIVE = live;
+      document.body.classList.toggle('static', !live);
+      return live;
+    });
+}
+
+function history(key){
+  if (HIST) return Promise.resolve(HIST[key] || null);
+  if (!HIST_PENDING){
+    HIST_PENDING = fetch('./history.json', { cache:'no-store' })
+      .then(function(r){ return r.ok ? r.json() : {}; })
+      .catch(function(){ return {}; })
+      .then(function(h){ HIST = h; return h; });
+  }
+  return HIST_PENDING.then(function(h){ return h[key] || null; });
+}
+
+/* ---------------- Daten laden ---------------- */
+function load(silent){
+  return fetch(BASE + '/data.json?t=' + Date.now(), { cache:'no-store' })
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(d){ DATA = d; paintHeader(); render(); return true; })
+    .catch(function(){
+      if (!DATA) noData();
+      else if (!silent) toast('Keine neuen Daten erreichbar – zeige den letzten Stand.');
+      return false;
+    });
+}
+
+function noData(){
+  $('standText').textContent = 'keine Daten';
+  $('statusDot').className = 'dot stale';
+  list.innerHTML = '<div class="empty"><h2>Noch keine Scan-Daten</h2>' +
+    '<p>' + (LIVE
+      ? 'Der erste Durchlauf läuft noch. Gleich füllt sich die App von selbst.'
+      : 'Die App findet keine <code>data.json</code>. Läuft der tägliche Scan schon durch?') +
+    '</p></div>';
+}
+
+function paintHeader(){
+  $('standText').textContent = 'Stand ' + (DATA.scan_time || '–');
+  var mins = 1e9;
+  if (DATA.generated_at) mins = (Date.now() - new Date(DATA.generated_at).getTime()) / 60000;
+  /* Server scannt stündlich, die Cloud einmal am Tag - entsprechend
+     unterschiedlich früh gilt ein Stand als veraltet. */
+  var limit = LIVE ? 90 : 30 * 60;
+  $('statusDot').className = 'dot ' + (mins < limit ? 'live' : 'stale');
+
+  var n = function(id, v){ var el = $(id); el.textContent = v > 0 ? (v > 99 ? '99+' : v) : ''; };
+  n('n-offers', (DATA.offers||[]).length);
+  n('n-preorders', (DATA.preorders||[]).length);
+  n('n-alerts', (DATA.alerts||[]).reduce(function(s,a){ return s + a.items.length; }, 0));
+  var c = DATA.changes || {};
+  n('n-changes', (c.new_offers_48h||[]).length + (c.price_drops||[]).length + (c.new_items||[]).length);
+
+  var types = {};
+  [].concat(DATA.offers||[], DATA.preorders||[]).forEach(function(g){ types[g.product_type] = 1; });
+  $('typeopts').innerHTML = ['Alle'].concat(Object.keys(types).sort()).map(function(t){
+    return '<button class="chip' + (t === S.type ? ' on' : '') + '" data-type="' + esc(t) + '">' + esc(t) + '</button>';
+  }).join('');
+}
+
+/* ---------------- Filtern ---------------- */
+function currentGroups(){
+  var src = S.tab === 'offers' ? (DATA.offers||[]) : (DATA.preorders||[]);
+  var q = S.q.trim().toLowerCase();
+  var minD = S.tab === 'offers' ? DISCS[S.disc][1] : 0;
+  var lang = LANGS[S.lang];
+  var out = src.filter(function(g){
+    if (q && g.search.indexOf(q) === -1) return false;
+    if (minD && g.best_discount < minD) return false;
+    if (S.lang && g.languages.indexOf(lang) === -1) return false;
+    if (S.type !== 'Alle' && g.product_type !== S.type) return false;
+    return true;
+  });
+  return out.sort(SORTS[S.sort][1]);
+}
+
+/* ---------------- Karten ---------------- */
+function thumb(src, title){
+  return src
+    ? '<div class="thumb"><img src="' + esc(src) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
+      'onerror="this.parentNode.innerHTML=\'<div class=&quot;ph&quot;>◓</div>\'"></div>'
+    : '<div class="thumb"><div class="ph">◓</div></div>';
+}
+
+function cardHTML(g, i){
+  var pre = g.kind === 'preorder';
+  var badge = g.best_discount > 0
+    ? '<span class="badge">−' + g.best_discount + '%</span>'
+    : (pre ? '<span class="badge pre">Preorder</span>' : '');
+  var langs = g.languages.slice(0,2).map(function(l){ return '<i class="tag">' + esc(l.slice(0,2).toUpperCase()) + '</i>'; }).join('');
+  return '<article class="card" data-i="' + i + '">' +
+    '<button class="cardtop">' +
+      thumb(g.image, g.title) +
+      '<div class="cardmain">' +
+        '<div class="ttl">' + esc(g.title) + '</div>' +
+        '<div class="sub">' + langs + '<span>' + g.shop_count + (g.shop_count === 1 ? ' Shop' : ' Shops') + '</span>' +
+        '<span>·</span><span>' + esc(g.product_type) + '</span></div>' +
+      '</div>' +
+      '<div class="pricecol">' + badge +
+        '<div><div class="ab">ab</div><div class="price">' + euro(g.min_price) + '</div></div>' +
+      '</div>' +
+    '</button>' +
+    '<div class="ladder"></div>' +
+  '</article>';
+}
+
+function ladderHTML(g){
+  var lo = g.min_price, hi = g.max_price;
+  var span = Math.max(hi - lo, 0.01);
+  var rows = g.shops.map(function(s, idx){
+    var frac = 0.18 + 0.82 * ((s.price - lo) / span);
+    return '<a class="rung' + (idx === 0 ? ' best' : '') + '" href="' + esc(s.url) + '" target="_blank" rel="noopener">' +
+      '<div class="rungtop">' +
+        '<span class="rungshop">' + esc(s.shop) + '</span>' +
+        '<span class="runglang">' + esc(s.language) + '</span>' +
+        (idx === 0 ? '<span class="best-tag">Bestpreis</span>' : '') +
+        (s.compare_at ? '<span class="rungold">' + euro(s.compare_at) + '</span>' : '') +
+        '<span class="rungprice">' + euro(s.price) + '</span>' +
+      '</div>' +
+      '<div class="bar"><i style="width:' + (frac * 100).toFixed(1) + '%"></i></div>' +
+    '</a>';
+  }).join('');
+  var diff = hi - lo;
+  return '<div class="spark" data-key="' + esc(g.history_keys.length ? g.history_keys[0].key : '') + '"></div>' +
+    '<div class="ladderhead"><span>Preise je Shop</span><span>' +
+      (diff > 0.01 ? esc(euro(diff)) + ' Unterschied' : 'überall gleich') + '</span></div>' + rows;
+}
+
+/* Preisverlauf als kleine Linie – nur wenn der Server erreichbar ist. */
+function loadSpark(el){
+  var key = el.getAttribute('data-key');
+  if (!key || el.dataset.done) return;
+  el.dataset.done = '1';
+  var source = LIVE
+    ? fetch(BASE + '/price-history?key=' + encodeURIComponent(key))
+        .then(function(r){ return r.json(); })
+        .then(function(d){ return d.history || []; })
+    : history(key).then(function(h){ return h || []; });
+  source
+    .then(function(raw){
+      var h = raw.slice(-60);
+      if (h.length < 2) return;
+      var ps = h.map(function(p){ return p.price; });
+      var lo = Math.min.apply(null, ps), hi = Math.max.apply(null, ps);
+      var span = Math.max(hi - lo, 0.01);
+      var pts = ps.map(function(p, i){
+        return (i / (ps.length - 1) * 100).toFixed(2) + ',' + (34 - (p - lo) / span * 28).toFixed(2);
+      }).join(' ');
+      var trend = ps[ps.length-1] - ps[0];
+      var col = trend <= 0 ? '#3ddba4' : '#ff4d63';
+      el.innerHTML =
+        '<div class="sparkhead">Preisverlauf<span>' + (trend <= 0 ? '−' : '+') + euro(Math.abs(trend)) + '</span></div>' +
+        '<svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">' +
+          '<polygon points="0,40 ' + pts + ' 100,40" fill="' + col + '" opacity=".12"/>' +
+          '<polyline points="' + pts + '" fill="none" stroke="' + col +
+          '" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>' +
+        '</svg>' +
+        '<p class="sparknote">' + h.length + ' Tage · günstigster Preis ' + euro(lo) + ', teuerster ' + euro(hi) + '</p>';
+    })
+    .catch(function(){ /* ohne Server bleibt der Verlauf einfach leer */ });
+}
+
+/* ---------------- Rendern ---------------- */
+function render(reset){
+  if (!DATA) return;
+  if (reset !== false) S.shown = 0;
+  if (S.tab === 'alerts') return renderAlerts();
+  if (S.tab === 'changes') return renderChanges();
+
+  var groups = currentGroups();
+  if (!groups.length) return renderEmpty();
+
+  if (S.shown === 0) list.innerHTML = '';
+  var start = S.shown;
+  var slice = groups.slice(start, start + PAGE);
+  var html = slice.map(function(g, k){ return cardHTML(g, start + k); }).join('');
+  var oldMore = list.querySelector('.more'); if (oldMore) oldMore.remove();
+  list.insertAdjacentHTML('beforeend', html);
+  S.shown += slice.length;
+  S._groups = groups;
+  if (S.shown < groups.length){
+    list.insertAdjacentHTML('beforeend',
+      '<button class="more">Weitere ' + Math.min(PAGE, groups.length - S.shown) + ' von ' + (groups.length - S.shown) + ' anzeigen</button>');
+  }
+}
+
+function renderEmpty(){
+  var filtered = S.lang > 0 || S.disc > 0 || S.type !== 'Alle';
+  var hint = S.q ? 'Andere Schreibweise probieren.'
+                 : 'Der letzte Scan hat hier nichts gefunden.';
+  list.innerHTML = '<div class="empty"><h2>Nichts gefunden</h2><p>' + hint + '</p>' +
+    (filtered ? '<button class="more" id="resetFilters">Filter zurücksetzen</button>' : '') + '</div>';
+  var r = $('resetFilters');
+  if (r) r.addEventListener('click', function(){
+    S.lang = 0; S.disc = 0; S.type = 'Alle';
+    $('c-lang').textContent = 'Alle'; $('c-disc').textContent = 'egal'; $('c-type').textContent = 'Alle';
+    [].forEach.call(document.querySelectorAll('#chips .chip'), function(c){ c.classList.remove('on'); });
+    render();
+  });
+}
+
+function renderAlerts(){
+  var groups = DATA.alerts || [];
+  var q = S.q.trim().toLowerCase();
+  var html = '';
+  var idx = [];
+  groups.forEach(function(a){
+    var items = a.items.filter(function(g){ return !q || g.search.indexOf(q) !== -1; });
+    if (!items.length) return;
+    html += '<div class="sectionlabel">' + esc(a.keyword) + ' · ' + items.length + '</div>';
+    html += items.map(function(g){ idx.push(g); return cardHTML(g, idx.length - 1); }).join('');
+  });
+  S._groups = idx;
+  list.innerHTML = html || '<div class="empty"><h2>Keine Alarm-Treffer</h2>' +
+    '<p>Suchbegriffe stehen in <code>alerts.json</code>. Neue Begriffe greifen beim nächsten Scan.</p></div>';
+}
+
+function rowHTML(it, oldPrice){
+  return '<a class="row" href="' + esc(it.url) + '" target="_blank" rel="noopener">' +
+    thumb(it.image, it.title) +
+    '<div class="rowmain"><div class="ttl">' + esc(it.title) + '</div>' +
+    '<div class="sub"><span>' + esc(it.shop) + '</span></div></div>' +
+    '<div class="rowprice">' + euro(it.price) +
+      (oldPrice ? '<small>' + euro(oldPrice) + '</small>' : '') + '</div></a>';
+}
+
+function renderChanges(){
+  var c = DATA.changes || {};
+  var q = S.q.trim().toLowerCase();
+  var f = function(arr){
+    return (arr||[]).filter(function(it){
+      return !q || (it.title + ' ' + it.shop).toLowerCase().indexOf(q) !== -1;
+    });
+  };
+  var blocks = [
+    ['Neue Angebote (48 h)', f(c.new_offers_48h), false],
+    ['Günstiger geworden',   f(c.price_drops), true],
+    ['Neu im Sortiment',     f(c.new_items), false]
+  ];
+  var html = '';
+  blocks.forEach(function(b){
+    if (!b[1].length) return;
+    html += '<div class="sectionlabel">' + b[0] + ' · ' + b[1].length + '</div>';
+    html += b[1].map(function(it){ return rowHTML(it, b[2] ? it.old_price : null); }).join('');
+  });
+  list.innerHTML = html || '<div class="empty"><h2>Noch nichts Neues</h2>' +
+    '<p>Hier landen Preissenkungen und frische Angebote, sobald der Server zweimal gescannt hat.</p></div>';
+}
+
+/* ---------------- Bedienung ---------------- */
+list.addEventListener('click', function(e){
+  var more = e.target.closest('.more');
+  if (more){ more.remove(); render(false); return; }
+  var top = e.target.closest('.cardtop');
+  if (!top) return;
+  var card = top.parentNode;
+  var g = (S._groups || [])[+card.dataset.i];
+  if (!g) return;
+  var open = card.classList.toggle('open');
+  if (open && !card.querySelector('.rung')){
+    card.querySelector('.ladder').innerHTML = ladderHTML(g);
+    loadSpark(card.querySelector('.spark'));
+  }
+});
+
+document.getElementById('tabs').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  [].forEach.call(this.children, function(x){ x.classList.remove('on'); });
+  b.classList.add('on');
+  S.tab = b.dataset.tab;
+  document.getElementById('chips').style.display = (S.tab === 'changes' || S.tab === 'alerts') ? 'none' : '';
+  document.querySelector('[data-cycle="disc"]').style.display = (S.tab === 'offers') ? '' : 'none';
+  window.scrollTo({ top:0 });
+  render();
+});
+
+$('chips').addEventListener('click', function(e){
+  var c = e.target.closest('.chip');
+  if (!c) return;
+  if (c.id === 'c-type-chip'){ $('sheetwrap').classList.add('open'); return; }
+  var k = c.dataset.cycle;
+  if (k === 'sort'){ S.sort = (S.sort + 1) % SORTS.length; $('c-sort').textContent = SORTS[S.sort][0]; }
+  if (k === 'lang'){ S.lang = (S.lang + 1) % LANGS.length; $('c-lang').textContent = LANGS[S.lang]; c.classList.toggle('on', S.lang > 0); }
+  if (k === 'disc'){ S.disc = (S.disc + 1) % DISCS.length; $('c-disc').textContent = DISCS[S.disc][0]; c.classList.toggle('on', S.disc > 0); }
+  render();
+});
+
+$('sheetwrap').addEventListener('click', function(e){
+  var b = e.target.closest('[data-type]');
+  if (b){
+    S.type = b.dataset.type;
+    $('c-type').textContent = S.type;
+    $('c-type-chip').classList.toggle('on', S.type !== 'Alle');
+    [].forEach.call(this.querySelectorAll('[data-type]'), function(x){ x.classList.toggle('on', x === b); });
+    render();
+  }
+  if (b || e.target.classList.contains('scrim')) this.classList.remove('open');
+});
+
+var qTimer;
+$('q').addEventListener('input', function(){
+  clearTimeout(qTimer);
+  var v = this.value;
+  qTimer = setTimeout(function(){ S.q = v; render(); }, 180);
+});
+
+/* Neu suchen – braucht den laufenden Server (--serve) */
+var scanning = false;
+function rescan(){
+  if (scanning) return;
+  scanning = true;
+  $('refresh').classList.add('busy');
+  fetch(BASE + '/rescan', { method:'POST' })
+    .then(function(){ toast('Scan läuft – die Shops werden abgeklappert.'); poll(); })
+    .catch(function(){
+      scanning = false; $('refresh').classList.remove('busy');
+      toast('Kein Server erreichbar. Auf dem PC: python scan.py --serve');
+    });
+}
+function poll(){
+  fetch(BASE + '/progress')
+    .then(function(r){ return r.json(); })
+    .then(function(p){
+      if (p.running){
+        $('standText').textContent = 'scannt ' + p.done + '/' + p.total;
+        setTimeout(poll, 2000);
+      } else {
+        scanning = false; $('refresh').classList.remove('busy');
+        load(true).then(function(){ toast('Fertig – neue Preise sind da.'); });
+      }
+    })
+    .catch(function(){ scanning = false; $('refresh').classList.remove('busy'); });
+}
+$('refresh').addEventListener('click', function(){
+  if (LIVE) return rescan();
+  $('refresh').classList.add('busy');
+  load(false).then(function(){
+    $('refresh').classList.remove('busy');
+    toast('Auf den neuesten veröffentlichten Stand geprüft.');
+  });
+});
+
+/* Ziehen zum Aktualisieren */
+var startY = 0, pulling = false;
+addEventListener('touchstart', function(e){
+  if (window.scrollY <= 0 && !scanning){ startY = e.touches[0].clientY; pulling = true; }
+}, { passive:true });
+addEventListener('touchmove', function(e){
+  if (!pulling) return;
+  var d = e.touches[0].clientY - startY;
+  if (d <= 0){ $('pull').style.height = '0px'; return; }
+  var h = Math.min(d * 0.5, 78);
+  $('pull').style.height = h + 'px';
+  $('pulltext').textContent = h >= 62
+    ? (LIVE ? 'Loslassen zum Suchen' : 'Loslassen zum Aktualisieren')
+    : 'Ziehen zum Aktualisieren';
+}, { passive:true });
+addEventListener('touchend', function(){
+  if (!pulling) return;
+  pulling = false;
+  var h = parseFloat($('pull').style.height) || 0;
+  $('pull').style.height = '0px';
+  if (h >= 62){ if (LIVE) rescan(); else load(false).then(function(){ toast('Aktualisiert.'); }); }
+});
+
+/* Start */
+detectMode().then(load);
+setInterval(function(){ if (!scanning) load(true); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden && !scanning) load(true); });
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+  navigator.serviceWorker.register('./sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
