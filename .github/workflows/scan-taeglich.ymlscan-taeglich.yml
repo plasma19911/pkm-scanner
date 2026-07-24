@@ -1,20 +1,29 @@
-name: Stündlicher Pokémon-Scan
+name: Pokémon-Scan alle 2 Stunden
 
 on:
   schedule:
-    # Jede Stunde zur 13. Minute. Krumme Minute mit Absicht: zur vollen und
-    # halben Stunde überspringt GitHub geplante Läufe gern wegen Überlastung.
+    # Alle zwei Stunden zur 13. Minute - zwölf Läufe am Tag:
+    #   00:13  02:13  04:13 ... 22:13  (UTC)
+    #   02:13  04:13  06:13 ... 00:13  (deutsche Sommerzeit)
     #
-    # Zu oft? "13 */3 * * *" scannt alle drei Stunden, "13 */6 * * *" alle
-    # sechs. Der Rest der Datei bleibt dabei unverändert.
-    - cron: "13 */2 * * * "
+    # WICHTIG: fünf Felder, immer. Minute, Stunde, Tag, Monat, Wochentag.
+    # "13 */2 * * " mit nur vier Feldern lehnt GitHub ab - die Datei gilt
+    # dann als ungültig und NICHTS läuft mehr, auch nicht von Hand.
+    #
+    # Krumme Minute mit Absicht: zur vollen und halben Stunde überspringt
+    # GitHub geplante Läufe gern wegen Überlastung.
+    - cron: "13 */2 * * *"
+    # Nachschlag eine halbe Stunde später. Fiel der erste Termin aus, greift
+    # dieser; lief er durch, stellt der zweite nur fest, dass sich nichts
+    # geändert hat, und committet nichts (der Fingerabdruck-Vergleich weiter
+    # unten verhindert das). Kostet also nichts außer ein paar Minuten
+    # Rechenzeit, die bei öffentlichen Repositories ohnehin frei sind.
+    - cron: "43 */2 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# Verhindert, dass sich zwei Läufe überholen, falls einer länger als eine
-# Stunde braucht. Der zweite wartet dann, statt gleichzeitig zu schreiben.
 concurrency:
   group: scan
   cancel-in-progress: false
@@ -38,10 +47,9 @@ jobs:
 
       # Das Gedaechtnis des Scanners: Preisverlauf, seit wann ein Angebot
       # laeuft, und der HTTP-Zwischenspeicher. Frueher wanderte das in jeden
-      # Commit - bei stuendlichen Laeufen waeren das rund zwei Megabyte pro
-      # Stunde, die fuer immer in der Versionsgeschichte liegen bleiben. Hier
-      # liegt es in GitHubs Zwischenspeicher: gleiche Funktion, aber das
-      # Repository waechst nicht mit.
+      # Commit - rund zwei Megabyte pro Lauf, die fuer immer in der
+      # Versionsgeschichte liegen bleiben. Hier liegt es in GitHubs
+      # Zwischenspeicher: gleiche Funktion, aber das Repository waechst nicht.
       - name: Verlauf aus dem Zwischenspeicher holen
         uses: actions/cache/restore@v4
         with:
@@ -49,8 +57,6 @@ jobs:
             price_history.json
             offers_history.json
             http_cache.json
-          # Jeder Lauf legt unter eigenem Schluessel ab, geholt wird der
-          # neueste - so wird der Speicher fortgeschrieben statt eingefroren.
           key: verlauf-${{ github.run_id }}
           restore-keys: |
             verlauf-
@@ -83,10 +89,10 @@ jobs:
               sys.exit(1)
           PY
 
-      # Stuendlich scannen heisst nicht stuendlich committen. Verglichen wird
-      # der Inhalt OHNE Zeitstempel: hat sich kein einziger Preis geruehrt,
-      # bleibt das Repository unberuehrt. Alle sechs Stunden gibt es trotzdem
-      # einen Commit, damit das Datum in der App nicht einfriert.
+      # Oft scannen heisst nicht oft committen. Verglichen wird der Inhalt
+      # OHNE Zeitstempel: hat sich kein einziger Preis geruehrt, bleibt das
+      # Repository unberuehrt. Alle sechs Stunden gibt es trotzdem einen
+      # Commit, damit das Datum in der App nicht einfriert.
       - name: Hat sich inhaltlich etwas geändert?
         id: vergleich
         run: |
@@ -144,8 +150,7 @@ jobs:
         run: |
           git config user.name "pkm-scanner-bot"
           git config user.email "actions@github.com"
-          # Bewusst NUR docs/ - der Verlauf liegt im Zwischenspeicher und hat
-          # in der Versionsgeschichte nichts verloren.
+          # Bewusst NUR docs/ - der Verlauf liegt im Zwischenspeicher.
           git add -A -f docs
           if git diff --staged --quiet; then
             echo "Doch nichts zu committen."
