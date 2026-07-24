@@ -1,26 +1,20 @@
-name: Täglicher Pokémon-Scan
+name: Stündlicher Pokémon-Scan
 
 on:
   schedule:
-    # Zwei Termine, beide bewusst auf krummen Minuten: zur vollen und halben
-    # Stunde staut sich bei GitHub der halbe Planet, und geplante Laeufe
-    # werden dann verzoegert oder ganz uebersprungen.
+    # Jede Stunde zur 13. Minute. Krumme Minute mit Absicht: zur vollen und
+    # halben Stunde überspringt GitHub geplante Läufe gern wegen Überlastung.
     #
-    #   04:17 UTC = 06:17 deutscher Sommerzeit (05:17 im Winter)
-    #   10:47 UTC = 12:47 deutscher Sommerzeit (11:47 im Winter)
-    #
-    # Der zweite Termin ist die Absicherung: faellt der Morgenlauf aus,
-    # sind die Preise mittags trotzdem aktuell. Wer nur einmal taeglich
-    # scannen will, loescht die zweite Zeile.
-    - cron: "17 4 * * *"
-    - cron: "47 10 * * *"
-  # Jederzeit von Hand startbar: Reiter "Actions" -> diesen Workflow
-  # waehlen -> "Run workflow".
+    # Zu oft? "13 */3 * * *" scannt alle drei Stunden, "13 */6 * * *" alle
+    # sechs. Der Rest der Datei bleibt dabei unverändert.
+    - cron: "13 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# Verhindert, dass sich zwei Läufe überholen, falls einer länger als eine
+# Stunde braucht. Der zweite wartet dann, statt gleichzeitig zu schreiben.
 concurrency:
   group: scan
   cancel-in-progress: false
@@ -28,7 +22,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
 
     steps:
       - name: Repository holen
@@ -42,13 +36,31 @@ jobs:
       - name: Pillow installieren (für die App-Icons)
         run: pip install --quiet pillow
 
+      # Das Gedaechtnis des Scanners: Preisverlauf, seit wann ein Angebot
+      # laeuft, und der HTTP-Zwischenspeicher. Frueher wanderte das in jeden
+      # Commit - bei stuendlichen Laeufen waeren das rund zwei Megabyte pro
+      # Stunde, die fuer immer in der Versionsgeschichte liegen bleiben. Hier
+      # liegt es in GitHubs Zwischenspeicher: gleiche Funktion, aber das
+      # Repository waechst nicht mit.
+      - name: Verlauf aus dem Zwischenspeicher holen
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            price_history.json
+            offers_history.json
+            http_cache.json
+          # Jeder Lauf legt unter eigenem Schluessel ab, geholt wird der
+          # neueste - so wird der Speicher fortgeschrieben statt eingefroren.
+          key: verlauf-${{ github.run_id }}
+          restore-keys: |
+            verlauf-
+
       - name: Shops scannen und App veröffentlichen
         run: python scan.py --publish-dir docs
 
-      # Wichtig: nicht nur pruefen, OB die Datei da ist, sondern ob sie aus
-      # DIESEM Lauf stammt. Sonst wirkt ein Lauf erfolgreich, der wegen
-      # gesperrter Shops gar nichts veroeffentlicht hat - die alte Datei
-      # liegt ja weiterhin im Ordner.
+      # Nicht nur pruefen, OB die Datei da ist, sondern ob sie aus DIESEM Lauf
+      # stammt. Sonst wirkt ein Lauf erfolgreich, der wegen gesperrter Shops
+      # gar nichts veroeffentlicht hat - die alte Datei liegt ja noch da.
       - name: Prüfen, ob die Daten wirklich frisch sind
         run: |
           if [ ! -s docs/data.json ]; then
@@ -57,54 +69,112 @@ jobs:
           fi
           python - <<'PY'
           import datetime, json, sys
-
           d = json.load(open("docs/data.json", encoding="utf-8"))
-          alters_h = None
+          alter = None
           if d.get("generated_at"):
               erzeugt = datetime.datetime.fromisoformat(d["generated_at"])
-              alters_h = (datetime.datetime.now() - erzeugt).total_seconds() / 3600
-
-          produkte = d.get("product_count", 0)
+              alter = (datetime.datetime.now() - erzeugt).total_seconds() / 3600
           print(f"Stand {d.get('scan_time')}: {len(d.get('offers', []))} Angebote, "
-                f"{len(d.get('preorders', []))} Vorbestellungen, {produkte} Produkte")
-
-          if alters_h is None or alters_h > 2:
+                f"{len(d.get('preorders', []))} Vorbestellungen, "
+                f"{d.get('product_count', 0)} Produkte")
+          if alter is None or alter > 2:
               print("::error::Die veroeffentlichten Daten stammen nicht aus diesem "
-                    "Lauf. Vermutlich haben zu wenige Shops geantwortet, deshalb "
-                    "wurde der alte Stand behalten.")
+                    "Lauf - vermutlich haben zu wenige Shops geantwortet.")
               sys.exit(1)
           PY
 
+      # Stuendlich scannen heisst nicht stuendlich committen. Verglichen wird
+      # der Inhalt OHNE Zeitstempel: hat sich kein einziger Preis geruehrt,
+      # bleibt das Repository unberuehrt. Alle sechs Stunden gibt es trotzdem
+      # einen Commit, damit das Datum in der App nicht einfriert.
+      - name: Hat sich inhaltlich etwas geändert?
+        id: vergleich
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime, hashlib, json, pathlib
+
+          MARKE = pathlib.Path("docs/.fingerprint")
+          MAX_ALTER_STUNDEN = 6
+
+          def fingerabdruck():
+              teile = []
+              for pfad, fluechtig in (
+                      ("docs/data.json", ("scan_time", "generated_at", "errors")),
+                      ("docs/products.json", ("scan_time", "generated_at"))):
+                  p = pathlib.Path(pfad)
+                  if not p.exists():
+                      continue
+                  d = json.loads(p.read_text(encoding="utf-8"))
+                  for k in fluechtig:
+                      d.pop(k, None)
+                  teile.append(json.dumps(d, sort_keys=True, ensure_ascii=False))
+              return hashlib.sha256("".join(teile).encode()).hexdigest()
+
+          neu, alt, stand = fingerabdruck(), "", None
+          if MARKE.exists():
+              zeilen = MARKE.read_text(encoding="utf-8").splitlines()
+              alt = zeilen[0].strip() if zeilen else ""
+              if len(zeilen) > 1 and zeilen[1].strip():
+                  try:
+                      stand = datetime.datetime.fromisoformat(zeilen[1].strip())
+                  except ValueError:
+                      stand = None
+
+          jetzt = datetime.datetime.now()
+          if neu != alt:
+              grund = "Preise haben sich geaendert"
+          elif stand is None or (jetzt - stand).total_seconds() > MAX_ALTER_STUNDEN * 3600:
+              grund = "unveraendert, aber das Datum war zu alt"
+          else:
+              grund = ""
+
+          if grund:
+              MARKE.write_text(neu + "\n" + jetzt.isoformat(timespec="seconds"),
+                               encoding="utf-8")
+              print("commit=ja")
+              print(f"grund={grund}")
+          else:
+              print("commit=nein")
+              print("grund=nichts Neues")
+          PY
+          echo "Entscheidung getroffen."
+
       - name: Ergebnis zurück ins Repository schreiben
+        if: steps.vergleich.outputs.commit == 'ja'
         run: |
           git config user.name "pkm-scanner-bot"
           git config user.email "actions@github.com"
-          # -f (force) fuer docs: der veroeffentlichte Ordner gehoert immer
-          # ins Repository, auch wenn eine .gitignore-Regel zufaellig auf
-          # einen Dateinamen darin passt.
+          # Bewusst NUR docs/ - der Verlauf liegt im Zwischenspeicher und hat
+          # in der Versionsgeschichte nichts verloren.
           git add -A -f docs
-          git add -A price_history.json offers_history.json http_cache.json \
-                      alerts.json corrections.json 2>/dev/null || true
           if git diff --staged --quiet; then
-            echo "Keine Aenderungen - nichts zu committen."
+            echo "Doch nichts zu committen."
           else
             git commit -m "Scan vom $(date -u '+%d.%m.%Y %H:%M') UTC"
-            # Falls du waehrend des Laufs etwas ueber die Weboberflaeche
-            # geaendert hast: erst nachziehen, dann schieben. Sonst lehnt
-            # GitHub den Push ab ("fetch first") und der Lauf bricht ab,
-            # nachdem er die ganze Arbeit schon gemacht hat.
+            # Falls du waehrenddessen etwas ueber die Weboberflaeche geaendert
+            # hast: erst nachziehen, dann schieben. Sonst wird der Push
+            # abgelehnt ("fetch first") und der Lauf bricht ab.
             git pull --rebase --autostash
             git push
           fi
+
+      - name: Verlauf in den Zwischenspeicher legen
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            price_history.json
+            offers_history.json
+            http_cache.json
+          key: verlauf-${{ github.run_id }}
 
       - name: Zusammenfassung
         if: always()
         run: |
           {
             echo "### Ergebnis"
+            echo "Commit: ${{ steps.vergleich.outputs.commit || 'nein' }} (${{ steps.vergleich.outputs.grund || 'Lauf abgebrochen' }})"
             if [ -s docs/data.json ]; then
               python -c "import json;d=json.load(open('docs/data.json',encoding='utf-8'));print(f\"Stand: {d.get('scan_time')}\");print(f\"{len(d.get('offers',[]))} Angebote, {len(d.get('preorders',[]))} Vorbestellungen, {d.get('product_count',0)} Produkte\")"
-            else
-              echo "Keine Daten veroeffentlicht."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
