@@ -7,7 +7,7 @@ on:
     #
     # Zu oft? "13 */3 * * *" scannt alle drei Stunden, "13 */6 * * *" alle
     # sechs. Der Rest der Datei bleibt dabei unverändert.
-    - cron: "13 * * * *"
+    - cron: "13 */2 * * "
   workflow_dispatch:
 
 permissions:
