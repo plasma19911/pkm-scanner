@@ -89,6 +89,11 @@ jobs:
             echo "Keine Aenderungen - nichts zu committen."
           else
             git commit -m "Scan vom $(date -u '+%d.%m.%Y %H:%M') UTC"
+            # Falls du waehrend des Laufs etwas ueber die Weboberflaeche
+            # geaendert hast: erst nachziehen, dann schieben. Sonst lehnt
+            # GitHub den Push ab ("fetch first") und der Lauf bricht ab,
+            # nachdem er die ganze Arbeit schon gemacht hat.
+            git pull --rebase --autostash
             git push
           fi
 
