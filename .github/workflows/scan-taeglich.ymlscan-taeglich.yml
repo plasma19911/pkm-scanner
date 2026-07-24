@@ -2,14 +2,22 @@ name: Täglicher Pokémon-Scan
 
 on:
   schedule:
-    # 05:30 UTC = 07:30 deutscher Sommerzeit, 06:30 im Winter.
-    # GitHub startet geplante Läufe je nach Auslastung ein paar Minuten später.
-    - cron: "30 5 * * *"
-  # Zusätzlich jederzeit von Hand startbar: Reiter "Actions" -> diesen
-  # Workflow wählen -> "Run workflow".
+    # Zwei Termine, beide bewusst auf krummen Minuten: zur vollen und halben
+    # Stunde staut sich bei GitHub der halbe Planet, und geplante Laeufe
+    # werden dann verzoegert oder ganz uebersprungen.
+    #
+    #   04:17 UTC = 06:17 deutscher Sommerzeit (05:17 im Winter)
+    #   10:47 UTC = 12:47 deutscher Sommerzeit (11:47 im Winter)
+    #
+    # Der zweite Termin ist die Absicherung: faellt der Morgenlauf aus,
+    # sind die Preise mittags trotzdem aktuell. Wer nur einmal taeglich
+    # scannen will, loescht die zweite Zeile.
+    - cron: "17 4 * * *"
+    - cron: "47 10 * * *"
+  # Jederzeit von Hand startbar: Reiter "Actions" -> diesen Workflow
+  # waehlen -> "Run workflow".
   workflow_dispatch:
 
-# Der Workflow schreibt die neuen Daten zurück ins Repository.
 permissions:
   contents: write
 
@@ -37,29 +45,43 @@ jobs:
       - name: Shops scannen und App veröffentlichen
         run: python scan.py --publish-dir docs
 
-      # Lieber ein roter Lauf als eine App, die stumm ohne Daten dasteht.
-      - name: Prüfen, ob die App-Daten wirklich da sind
+      # Wichtig: nicht nur pruefen, OB die Datei da ist, sondern ob sie aus
+      # DIESEM Lauf stammt. Sonst wirkt ein Lauf erfolgreich, der wegen
+      # gesperrter Shops gar nichts veroeffentlicht hat - die alte Datei
+      # liegt ja weiterhin im Ordner.
+      - name: Prüfen, ob die Daten wirklich frisch sind
         run: |
           if [ ! -s docs/data.json ]; then
-            echo "::error::docs/data.json fehlt oder ist leer - der Scan hat nichts veroeffentlicht."
+            echo "::error::docs/data.json fehlt oder ist leer."
             exit 1
           fi
-          echo "docs/data.json: $(du -h docs/data.json | cut -f1)"
           python - <<'PY'
-          import json
+          import datetime, json, sys
+
           d = json.load(open("docs/data.json", encoding="utf-8"))
-          alerts = sum(len(a["items"]) for a in d.get("alerts", []))
+          alters_h = None
+          if d.get("generated_at"):
+              erzeugt = datetime.datetime.fromisoformat(d["generated_at"])
+              alters_h = (datetime.datetime.now() - erzeugt).total_seconds() / 3600
+
+          produkte = d.get("product_count", 0)
           print(f"Stand {d.get('scan_time')}: {len(d.get('offers', []))} Angebote, "
-                f"{len(d.get('preorders', []))} Vorbestellungen, {alerts} Alarm-Treffer")
+                f"{len(d.get('preorders', []))} Vorbestellungen, {produkte} Produkte")
+
+          if alters_h is None or alters_h > 2:
+              print("::error::Die veroeffentlichten Daten stammen nicht aus diesem "
+                    "Lauf. Vermutlich haben zu wenige Shops geantwortet, deshalb "
+                    "wurde der alte Stand behalten.")
+              sys.exit(1)
           PY
 
       - name: Ergebnis zurück ins Repository schreiben
         run: |
           git config user.name "pkm-scanner-bot"
           git config user.email "actions@github.com"
-          # -f (force) fuer docs: der veroeffentlichte Ordner gehoert immer ins
-          # Repository, auch wenn eine .gitignore-Regel zufaellig auf einen
-          # Dateinamen darin passt.
+          # -f (force) fuer docs: der veroeffentlichte Ordner gehoert immer
+          # ins Repository, auch wenn eine .gitignore-Regel zufaellig auf
+          # einen Dateinamen darin passt.
           git add -A -f docs
           git add -A price_history.json offers_history.json http_cache.json \
                       alerts.json corrections.json 2>/dev/null || true
@@ -76,7 +98,7 @@ jobs:
           {
             echo "### Ergebnis"
             if [ -s docs/data.json ]; then
-              echo "Veroeffentlicht: docs/data.json ($(du -h docs/data.json | cut -f1))"
+              python -c "import json;d=json.load(open('docs/data.json',encoding='utf-8'));print(f\"Stand: {d.get('scan_time')}\");print(f\"{len(d.get('offers',[]))} Angebote, {len(d.get('preorders',[]))} Vorbestellungen, {d.get('product_count',0)} Produkte\")"
             else
               echo "Keine Daten veroeffentlicht."
             fi
